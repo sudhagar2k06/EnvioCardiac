@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hospital Administrator Planning View - Cardiac Admissions</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #1e40af;
+      --primary-light: #3b82f6;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --success: #16a34a;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text-main); padding: 24px; line-height: 1.5; }
+    .container { max-width: 1280px; margin: 0 auto; }
+    header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 16px; }
+    h1 { font-size: 24px; color: var(--primary); font-weight: 700; }
+    .badge { padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: #dbeafe; color: #1e40af; }
+    
+    .grid-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .kpi-card { background: var(--card-bg); padding: 20px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .kpi-title { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 8px; }
+    .kpi-val { font-size: 28px; font-weight: 700; color: var(--text-main); }
+    .kpi-sub { font-size: 12px; margin-top: 4px; color: var(--text-muted); }
+
+    .main-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
+    @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
+    
+    .card { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .card-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* Controls */
+    .control-group { margin-bottom: 18px; }
+    .control-label { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+    .slider { width: 100%; height: 6px; border-radius: 3px; background: #e2e8f0; outline: none; -webkit-appearance: none; }
+    .slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--primary); cursor: pointer; }
+    
+    .preset-btn { width: 100%; padding: 10px 14px; margin-bottom: 10px; background: #f1f5f9; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; }
+    .preset-btn:hover { background: #e2e8f0; border-color: #cbd5e1; }
+    .preset-btn.active { background: #eff6ff; border-color: var(--primary-light); color: var(--primary); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+    th { text-align: left; padding: 10px 12px; background: #f8fafc; color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border); }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    tr:hover { background: #f8fafc; }
+    
+    .alert-box { padding: 12px 16px; border-radius: 8px; margin-top: 16px; font-size: 13px; display: none; }
+    .alert-warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
+    .alert-danger { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Hospital Admissions & Resource Planning View</h1>
+        <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Hero DMC Heart Institute (HDHI) • 14-Day Tactical Bed & Staffing Forecaster</p>
+      </div>
+      <div>
+        <span class="badge">Model: SARIMAX(2,0,1)x(1,0,0)₇</span>
+      </div>
+    </header>
+
+    <!-- Top KPI Cards -->
+    <div class="grid-kpi">
+      <div class="kpi-card">
+        <div class="kpi-title">14-Day Total Admissions</div>
+        <div class="kpi-val" id="kpi-total">306</div>
+        <div class="kpi-sub">Baseline Expected Patient Influx</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Peak Daily Influx</div>
+        <div class="kpi-val" id="kpi-peak" style="color: var(--primary);">28.0</div>
+        <div class="kpi-sub" id="kpi-peak-date">Thursday, April 4</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">CCU/ICU Bed Requirement</div>
+        <div class="kpi-val" id="kpi-icu" style="color: var(--warning);">18 Beds</div>
+        <div class="kpi-sub">Estimated 60% Critical Care Ratio</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Cath Lab Staffing Slots</div>
+        <div class="kpi-val" id="kpi-cath">6 Teams</div>
+        <div class="kpi-sub">Peak Day Interventional Coverage</div>
+      </div>
+    </div>
+
+    <!-- Main Section: Chart + What-If Controls -->
+    <div class="main-grid">
+      <!-- Chart Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>14-Day Admissions Projection with 80% Prediction Interval</span>
+          <span id="scenario-tag" style="font-size: 12px; color: var(--primary); font-weight: 500;">Scenario: Baseline</span>
+        </div>
+        <div style="height: 380px;">
+          <canvas id="forecastChart"></canvas>
+        </div>
+        
+        <div id="capacityAlert" class="alert-box alert-warning">
+          ⚠️ <strong>Capacity Warning:</strong> Projected admissions on peak days exceed normal ward intake threshold (25 beds). Activate on-call nursing roster.
+        </div>
+      </div>
+
+      <!-- Controls & Scenario Simulator -->
+      <div class="card">
+        <div class="card-title">"What-If" Scenario Simulator</div>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+          Simulate environmental stress tests using empirical distributed lag parameters to forecast operational hospital impact.
+        </p>
+
+        <div style="margin-bottom: 20px;">
+          <button class="preset-btn active" onclick="applyPreset('baseline')">
+            <span>Standard Baseline (Actual Forecast)</span>
+            <span>0%</span>
+          </button>
+          <button class="preset-btn" onclick="applyPreset('smog')">
+            <span>Severe Smog Episode (+30% PM2.5 / AQI)</span>
+            <span style="color: var(--danger);">+30%</span>
+          </button>
+          <button class="preset-btn" onclick="applyPreset('cold')">
+            <span>Sudden Cold Wave (-6°C Temperature Drop)</span>
+            <span style="color: #0284c7;">-6°C</span>
+          </button>
+          <button class="preset-btn" onclick="applyPreset('combined')">
+            <span>Winter Combined Stress (Smog + Cold Snap)</span>
+            <span style="color: #7c3aed;">Severe</span>
+          </button>
+        </div>
+
+        <div class="control-group">
+          <div class="control-label">
+            <span>Air Pollution Anomaly (PM2.5):</span>
+            <span id="pm25-val" style="font-weight: 600;">0%</span>
+          </div>
+          <input type="range" id="pm25-slider" class="slider" min="-50" max="100" value="0" oninput="updateCustom()">
+        </div>
+
+        <div class="control-group">
+          <div class="control-label">
+            <span>Temperature Anomaly (Cold Drop):</span>
+            <span id="temp-val" style="font-weight: 600;">0 °C</span>
+          </div>
+          <input type="range" id="temp-slider" class="slider" min="-10" max="10" value="0" oninput="updateCustom()">
+        </div>
+
+        <div style="background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; color: var(--text-muted); border: 1px solid var(--border);">
+          <strong>Empirical DLM Sensitivity:</strong>
+          <br>• +10 µg/m³ PM2.5 adds ~0.13 acute admissions/day (Lag 0).
+          <br>• -5°C Cold drop adds ~2.05 delayed admissions/day (Lag 4).
+        </div>
+      </div>
+    </div>
+
+    <!-- Table: Operational Schedule -->
+    <div class="card">
+      <div class="card-title">Daily Hospital Staffing & Bed Allocation Schedule</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Day</th>
+            <th>Calendar Event</th>
+            <th>Forecast (Mean)</th>
+            <th>80% Prediction Band</th>
+            <th>Target Ward Beds</th>
+            <th>CCU/ICU Reserve</th>
+            <th>Staffing Recommendation</th>
+          </tr>
+        </thead>
+        <tbody id="schedule-body">
+          <!-- Populated by JavaScript -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // Baseline Forecast Data
+    const baselineData = [
+      { date: '2019-04-01', day: 'Monday', event: 'Regular', mean: 21.4, lower: 13.3, upper: 29.5 },
+      { date: '2019-04-02', day: 'Tuesday', event: 'Regular', mean: 22.6, lower: 14.0, upper: 31.3 },
+      { date: '2019-04-03', day: 'Wednesday', event: 'Regular', mean: 24.0, lower: 15.2, upper: 32.8 },
+      { date: '2019-04-04', day: 'Thursday', event: 'Regular', mean: 28.0, lower: 19.2, upper: 36.8 },
+      { date: '2019-04-05', day: 'Friday', event: 'Regular', mean: 24.0, lower: 15.2, upper: 32.8 },
+      { date: '2019-04-06', day: 'Saturday', event: 'Weekend', mean: 16.7, lower: 7.9, upper: 25.4 },
+      { date: '2019-04-07', day: 'Sunday', event: 'Weekend', mean: 10.2, lower: 1.5, upper: 19.0 },
+      { date: '2019-04-08', day: 'Monday', event: 'Guru Nabha Dass B\'day', mean: 24.6, lower: 15.6, upper: 33.5 },
+      { date: '2019-04-09', day: 'Tuesday', event: 'Regular', mean: 24.2, lower: 15.2, upper: 33.1 },
+      { date: '2019-04-10', day: 'Wednesday', event: 'Regular', mean: 24.3, lower: 15.4, upper: 33.3 },
+      { date: '2019-04-11', day: 'Thursday', event: 'Regular', mean: 25.4, lower: 16.5, upper: 34.4 },
+      { date: '2019-04-12', day: 'Friday', event: 'Regular', mean: 23.3, lower: 14.3, upper: 32.2 },
+      { date: '2019-04-13', day: 'Saturday', event: 'Ram Navami / Vaisakhi', mean: 19.1, lower: 10.1, upper: 28.0 },
+      { date: '2019-04-14', day: 'Sunday', event: 'Ambedkar Jayanti', mean: 12.8, lower: 3.8, upper: 21.7 }
+    ];
+
+    let currentForecast = JSON.parse(JSON.stringify(baselineData));
+    let chart;
+
+    function initChart() {
+      const ctx = document.getElementById('forecastChart').getContext('2d');
+      const labels = currentForecast.map(d => `${d.day.substring(0,3)} ${d.date.substring(5)}`);
+      
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Upper 80% Bound',
+              data: currentForecast.map(d => d.upper),
+              borderColor: 'transparent',
+              backgroundColor: 'rgba(220, 38, 38, 0.12)',
+              fill: '+1',
+              pointRadius: 0
+            },
+            {
+              label: 'Lower 80% Bound',
+              data: currentForecast.map(d => d.lower),
+              borderColor: 'transparent',
+              backgroundColor: 'rgba(220, 38, 38, 0.12)',
+              fill: false,
+              pointRadius: 0
+            },
+            {
+              label: 'Projected Cardiac Admissions',
+              data: currentForecast.map(d => d.mean),
+              borderColor: '#1e40af',
+              backgroundColor: '#1e40af',
+              borderWidth: 3,
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              tension: 0.2
+            },
+            {
+              label: 'Ward Capacity Warning (25 beds)',
+              data: Array(14).fill(25),
+              borderColor: '#d97706',
+              borderDash: [5, 5],
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Daily Admissions' }
+            }
+          },
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.dataset.label}: ${context.parsed.y.toFixed(1)}`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderTableAndKPIs() {
+      const tbody = document.getElementById('schedule-body');
+      tbody.innerHTML = '';
+      
+      let total = 0;
+      let peak = 0;
+      let peakDate = '';
+      let hasWarning = false;
+
+      currentForecast.forEach((d, i) => {
+        total += d.mean;
+        if (d.mean > peak) {
+          peak = d.mean;
+          peakDate = `${d.day}, ${d.date}`;
+        }
+        if (d.mean >= 25) hasWarning = true;
+
+        const wardBeds = Math.ceil(d.mean * 1.1); // 10% safety buffer
+        const icuBeds = Math.ceil(d.mean * 0.6);
+        const nurses = Math.ceil(d.mean / 4);
+        
+        let statusBadge = `<span style="color: var(--success); font-weight: 600;">Normal</span>`;
+        if (d.mean >= 27) statusBadge = `<span style="color: var(--danger); font-weight: 600;">High (Overload)</span>`;
+        else if (d.mean >= 24) statusBadge = `<span style="color: var(--warning); font-weight: 600;">Moderate Surge</span>`;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${d.date}</strong></td>
+          <td>${d.day}</td>
+          <td>${d.event}</td>
+          <td><strong style="color: var(--primary);">${d.mean.toFixed(1)}</strong></td>
+          <td>[${d.lower.toFixed(1)} - ${d.upper.toFixed(1)}]</td>
+          <td>${wardBeds} beds</td>
+          <td>${icuBeds} beds</td>
+          <td>${statusBadge} (${nurses} RNs)</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('kpi-total').innerText = Math.round(total);
+      document.getElementById('kpi-peak').innerText = peak.toFixed(1);
+      document.getElementById('kpi-peak-date').innerText = peakDate;
+      document.getElementById('kpi-icu').innerText = `${Math.ceil(peak * 0.6)} Beds`;
+      document.getElementById('kpi-cath').innerText = `${Math.ceil(peak / 4.5)} Teams`;
+
+      const alertEl = document.getElementById('capacityAlert');
+      if (hasWarning) alertEl.style.display = 'block';
+      else alertEl.style.display = 'none';
+
+      // Update Chart data
+      if (chart) {
+        chart.data.datasets[0].data = currentForecast.map(d => d.upper);
+        chart.data.datasets[1].data = currentForecast.map(d => d.lower);
+        chart.data.datasets[2].data = currentForecast.map(d => d.mean);
+        chart.update();
+      }
+    }
+
+    function applyScenario(pm25Pct, tempDrop) {
+      document.getElementById('pm25-val').innerText = `${pm25Pct > 0 ? '+' : ''}${pm25Pct}%`;
+      document.getElementById('temp-val').innerText = `${tempDrop > 0 ? '+' : ''}${tempDrop} °C`;
+      document.getElementById('pm25-slider').value = pm25Pct;
+      document.getElementById('temp-slider').value = tempDrop;
+
+      // DLM impact calculation:
+      // Base average PM2.5 in April is ~80 ug/m3. A +30% spike is +24 ug/m3 (+2.4 units of 10).
+      // Each +10 ug/m3 PM2.5 adds ~0.125 admissions acute + ~0.07 cumulative.
+      // Each -5 C cold adds ~0.6 to 2.0 admissions.
+      const pmDeltaUnits = (80 * (pm25Pct / 100)) / 10.0;
+      const tempDeltaUnits = tempDrop / 5.0;
+
+      currentForecast = baselineData.map((d, i) => {
+        // Multi-lag distributed effect over time
+        const acuteSmogEffect = pmDeltaUnits * 0.125;
+        const delayedColdEffect = tempDeltaUnits * (i >= 3 ? 1.4 : 0.4);
+        
+        const delta = acuteSmogEffect + delayedColdEffect;
+        const newMean = Math.max(0, d.mean + delta);
+        return {
+          date: d.date,
+          day: d.day,
+          event: d.event,
+          mean: Math.round(newMean * 10) / 10,
+          lower: Math.round(Math.max(0, d.lower + delta) * 10) / 10,
+          upper: Math.round(Math.max(newMean, d.upper + delta) * 10) / 10
+        };
+      });
+
+      renderTableAndKPIs();
+    }
+
+    function applyPreset(name) {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      const scenarioTag = document.getElementById('scenario-tag');
+      if (name === 'baseline') {
+        scenarioTag.innerText = 'Scenario: Baseline Standard Forecast';
+        applyScenario(0, 0);
+      } else if (name === 'smog') {
+        scenarioTag.innerText = 'Scenario: +30% Severe Smog Episode';
+        applyScenario(30, 0);
+      } else if (name === 'cold') {
+        scenarioTag.innerText = 'Scenario: -6°C Sudden Cold Wave';
+        applyScenario(0, 6);
+      } else if (name === 'combined') {
+        scenarioTag.innerText = 'Scenario: Winter Combined Stress (+30% Smog & -6°C Cold)';
+        applyScenario(30, 6);
+      }
+    }
+
+    function updateCustom() {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      const pm = parseInt(document.getElementById('pm25-slider').value);
+      const temp = parseInt(document.getElementById('temp-slider').value);
+      document.getElementById('scenario-tag').innerText = `Custom Scenario: PM2.5 ${pm}%, Cold ${temp}°C`;
+      applyScenario(pm, temp);
+    }
+
+    window.onload = function() {
+      initChart();
+      renderTableAndKPIs();
+    };
+  </script>
+</body>
+</html>
