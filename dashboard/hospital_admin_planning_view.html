@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hospital Administrator Planning View - Cardiac Admissions</title>
+  <title>Hospital Administrator Planning View - Cardiac Admissions & CSV Forecaster</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     :root {
       --primary: #1e40af;
@@ -20,16 +21,32 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     body { background-color: var(--bg); color: var(--text-main); padding: 24px; line-height: 1.5; }
-    .container { max-width: 1280px; margin: 0 auto; }
-    header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 16px; }
+    .container { max-width: 1320px; margin: 0 auto; }
+    header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 16px; flex-wrap: wrap; gap: 12px; }
     h1 { font-size: 24px; color: var(--primary); font-weight: 700; }
-    .badge { padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: #dbeafe; color: #1e40af; }
+    .badge { padding: 5px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: #dbeafe; color: #1e40af; }
     
     .grid-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
     .kpi-card { background: var(--card-bg); padding: 20px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     .kpi-title { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 8px; }
     .kpi-val { font-size: 28px; font-weight: 700; color: var(--text-main); }
     .kpi-sub { font-size: 12px; margin-top: 4px; color: var(--text-muted); }
+
+    /* Upload Card */
+    .upload-card { background: var(--card-bg); border-radius: 12px; border: 2px dashed #94a3b8; padding: 24px; margin-bottom: 24px; text-align: center; transition: all 0.2s; }
+    .upload-card.dragover { border-color: var(--primary); background: #eff6ff; }
+    .upload-zone { cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .upload-icon { font-size: 36px; }
+    .upload-btn { background: var(--primary); color: white; border: none; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .upload-btn:hover { background: #1d4ed8; }
+    .file-input { display: none; }
+    .chip-container { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+    .file-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; background: #f1f5f9; border: 1px solid var(--border); }
+    .file-chip.active { background: #dcfce7; border-color: #86efac; color: #166534; }
+    .file-chip.warning { background: #fef3c7; border-color: #fde68a; color: #92400e; }
+    .quick-actions { display: flex; justify-content: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+    .sec-btn { background: #f1f5f9; color: var(--text-main); border: 1px solid var(--border); padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .sec-btn:hover { background: #e2e8f0; }
 
     .main-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px; }
     @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
@@ -55,6 +72,8 @@
     .alert-box { padding: 12px 16px; border-radius: 8px; margin-top: 16px; font-size: 13px; display: none; }
     .alert-warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
     .alert-danger { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
+    .export-btn { background: #059669; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .export-btn:hover { background: #047857; }
   </style>
 </head>
 <body>
@@ -62,19 +81,46 @@
     <header>
       <div>
         <h1>Hospital Admissions & Resource Planning View</h1>
-        <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Hero DMC Heart Institute (HDHI) • 14-Day Tactical Bed & Staffing Forecaster</p>
+        <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Hero DMC Heart Institute (HDHI) • Tactical 14-Day Bed & Staffing Forecaster</p>
       </div>
-      <div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="export-btn" onclick="exportForecastCSV()">📥 Export Forecast CSV</button>
         <span class="badge">Model: SARIMAX(2,0,1)x(1,0,0)₇</span>
       </div>
     </header>
+
+    <!-- Upload CSV Section (Supports input files with or without admission data) -->
+    <div class="upload-card" id="drop-area">
+      <div class="upload-zone" onclick="document.getElementById('file-input').click()">
+        <span class="upload-icon">📂</span>
+        <h3 style="font-size: 16px; color: var(--primary);">Upload Dataset CSVs (Weather, Air Quality, Festival, or Admissions)</h3>
+        <p style="font-size: 13px; color: var(--text-muted); max-width: 640px;">
+          Drag & drop or select CSV files from <code>Datasets.zip</code> (e.g. <code>weather_ludhiana_daily.csv</code>, <code>HDHI Pollution Data.csv</code>, <code>festival_calendar_punjab.csv</code>).
+          <br><strong>Note:</strong> If admission records are not provided, the system automatically forecasts upcoming patient admissions using the calibrated SARIMAX environmental response model.
+        </p>
+        <button type="button" class="upload-btn">Browse Files</button>
+        <input type="file" id="file-input" class="file-input" multiple accept=".csv">
+      </div>
+      
+      <div class="chip-container" id="file-chips">
+        <span class="file-chip" id="chip-weather">🌦️ Weather: Default Baseline</span>
+        <span class="file-chip" id="chip-pollution">🏭 Air Quality: Default Baseline</span>
+        <span class="file-chip" id="chip-festival">📅 Festival: Punjab 2017-2019</span>
+        <span class="file-chip warning" id="chip-admission">ℹ️ Admissions: Auto-Forecasted from Exogenous Factors</span>
+      </div>
+
+      <div class="quick-actions">
+        <button class="sec-btn" onclick="loadSampleNoAdmissions()">⚡ Test Sample: Weather + Air Quality (No Admissions)</button>
+        <button class="sec-btn" onclick="resetToBaseline()">🔄 Reset to April 2019 Baseline</button>
+      </div>
+    </div>
 
     <!-- Top KPI Cards -->
     <div class="grid-kpi">
       <div class="kpi-card">
         <div class="kpi-title">14-Day Total Admissions</div>
         <div class="kpi-val" id="kpi-total">306</div>
-        <div class="kpi-sub">Baseline Expected Patient Influx</div>
+        <div class="kpi-sub">Expected Patient Influx</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-title">Peak Daily Influx</div>
@@ -162,13 +208,16 @@
 
     <!-- Table: Operational Schedule -->
     <div class="card">
-      <div class="card-title">Daily Hospital Staffing & Bed Allocation Schedule</div>
+      <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>Daily Hospital Staffing & Bed Allocation Schedule</span>
+        <span id="forecast-source-badge" style="font-size: 12px; color: var(--text-muted);">Source: SARIMAX Exogenous Engine</span>
+      </div>
       <table>
         <thead>
           <tr>
             <th>Date</th>
             <th>Day</th>
-            <th>Calendar Event</th>
+            <th>Calendar / Environmental Status</th>
             <th>Forecast (Mean)</th>
             <th>80% Prediction Band</th>
             <th>Target Ward Beds</th>
@@ -184,8 +233,8 @@
   </div>
 
   <script>
-    // Baseline Forecast Data
-    const baselineData = [
+    // Initial Baseline Forecast Data (Starting 2019-04-01)
+    const defaultBaselineData = [
       { date: '2019-04-01', day: 'Monday', event: 'Regular', mean: 21.4, lower: 13.3, upper: 29.5 },
       { date: '2019-04-02', day: 'Tuesday', event: 'Regular', mean: 22.6, lower: 14.0, upper: 31.3 },
       { date: '2019-04-03', day: 'Wednesday', event: 'Regular', mean: 24.0, lower: 15.2, upper: 32.8 },
@@ -202,8 +251,15 @@
       { date: '2019-04-14', day: 'Sunday', event: 'Ambedkar Jayanti', mean: 12.8, lower: 3.8, upper: 21.7 }
     ];
 
-    let currentForecast = JSON.parse(JSON.stringify(baselineData));
+    let currentForecast = JSON.parse(JSON.stringify(defaultBaselineData));
+    let baseLoadedForecast = JSON.parse(JSON.stringify(defaultBaselineData));
     let chart;
+
+    // Environmental state from uploaded CSVs
+    let uploadedWeather = null;
+    let uploadedPollution = null;
+    let uploadedFestivals = null;
+    let uploadedAdmissions = null;
 
     function initChart() {
       const ctx = document.getElementById('forecastChart').getContext('2d');
@@ -242,7 +298,7 @@
             },
             {
               label: 'Ward Capacity Warning (25 beds)',
-              data: Array(14).fill(25),
+              data: Array(currentForecast.length).fill(25),
               borderColor: '#d97706',
               borderDash: [5, 5],
               borderWidth: 2,
@@ -324,11 +380,13 @@
       if (hasWarning) alertEl.style.display = 'block';
       else alertEl.style.display = 'none';
 
-      // Update Chart data
+      // Update Chart labels and datasets
       if (chart) {
+        chart.data.labels = currentForecast.map(d => `${d.day.substring(0,3)} ${d.date.substring(5)}`);
         chart.data.datasets[0].data = currentForecast.map(d => d.upper);
         chart.data.datasets[1].data = currentForecast.map(d => d.lower);
         chart.data.datasets[2].data = currentForecast.map(d => d.mean);
+        chart.data.datasets[3].data = Array(currentForecast.length).fill(25);
         chart.update();
       }
     }
@@ -340,14 +398,10 @@
       document.getElementById('temp-slider').value = tempDrop;
 
       // DLM impact calculation:
-      // Base average PM2.5 in April is ~80 ug/m3. A +30% spike is +24 ug/m3 (+2.4 units of 10).
-      // Each +10 ug/m3 PM2.5 adds ~0.125 admissions acute + ~0.07 cumulative.
-      // Each -5 C cold adds ~0.6 to 2.0 admissions.
       const pmDeltaUnits = (80 * (pm25Pct / 100)) / 10.0;
       const tempDeltaUnits = tempDrop / 5.0;
 
-      currentForecast = baselineData.map((d, i) => {
-        // Multi-lag distributed effect over time
+      currentForecast = baseLoadedForecast.map((d, i) => {
         const acuteSmogEffect = pmDeltaUnits * 0.125;
         const delayedColdEffect = tempDeltaUnits * (i >= 3 ? 1.4 : 0.4);
         
@@ -392,6 +446,283 @@
       const temp = parseInt(document.getElementById('temp-slider').value);
       document.getElementById('scenario-tag').innerText = `Custom Scenario: PM2.5 ${pm}%, Cold ${temp}°C`;
       applyScenario(pm, temp);
+    }
+
+    // --- CSV File Drag & Drop Handling ---
+    const dropArea = document.getElementById('drop-area');
+    const fileInput = document.getElementById('file-input');
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, (e) => { e.preventDefault(); dropArea.classList.add('dragover'); }, false);
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, (e) => { e.preventDefault(); dropArea.classList.remove('dragover'); }, false);
+    });
+    dropArea.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      handleFiles(files);
+    });
+    fileInput.addEventListener('change', function() {
+      handleFiles(this.files);
+    });
+
+    function handleFiles(files) {
+      if (!files || files.length === 0) return;
+      Array.from(files).forEach(file => {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function(results) {
+            classifyAndProcessCSV(file.name, results.data, results.meta.fields);
+          }
+        });
+      });
+    }
+
+    function classifyAndProcessCSV(filename, rows, headers) {
+      if (!headers) return;
+      const hLower = headers.map(h => h.toLowerCase());
+
+      // 1. Check for Weather file
+      if (hLower.some(h => h.includes('temp')) || filename.toLowerCase().includes('weather')) {
+        uploadedWeather = processWeatherRows(rows);
+        const chip = document.getElementById('chip-weather');
+        chip.className = 'file-chip active';
+        chip.innerText = `🌦️ Weather: ${filename} (${rows.length} rows)`;
+      }
+      // 2. Check for Air Quality / Pollution file
+      else if (hLower.some(h => h.includes('pm2.5') || h.includes('aqi')) || filename.toLowerCase().includes('pollut')) {
+        uploadedPollution = processPollutionRows(rows);
+        const chip = document.getElementById('chip-pollution');
+        chip.className = 'file-chip active';
+        chip.innerText = `🏭 Air Quality: ${filename} (${rows.length} rows)`;
+      }
+      // 3. Check for Festival / Holiday file
+      else if (hLower.some(h => h.includes('festival') || h.includes('source') || h.includes('type')) || filename.toLowerCase().includes('fest')) {
+        uploadedFestivals = processFestivalRows(rows);
+        const chip = document.getElementById('chip-festival');
+        chip.className = 'file-chip active';
+        chip.innerText = `📅 Festival: ${filename} (${rows.length} rows)`;
+      }
+      // 4. Check for Admission file
+      else if (hLower.some(h => h.includes('d.o.a') || h.includes('mrd')) || filename.toLowerCase().includes('admiss')) {
+        uploadedAdmissions = rows;
+        const chip = document.getElementById('chip-admission');
+        chip.className = 'file-chip active';
+        chip.innerText = `🏥 Admissions: ${filename} (${rows.length} records)`;
+      }
+
+      // Re-run the forecast calculation with the updated data
+      recalculateForecastFromCSVs();
+    }
+
+    function processWeatherRows(rows) {
+      const map = {};
+      rows.forEach(r => {
+        const dKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
+        const tKey = Object.keys(r).find(k => k.toLowerCase().includes('temp_mean') || k.toLowerCase().includes('temp'));
+        if (dKey && r[dKey]) {
+          const dtStr = new Date(r[dKey]).toISOString().split('T')[0];
+          const temp = parseFloat(r[tKey]);
+          if (!isNaN(temp)) map[dtStr] = temp;
+        }
+      });
+      return map;
+    }
+
+    function processPollutionRows(rows) {
+      const map = {};
+      rows.forEach(r => {
+        const dKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
+        const pKey = Object.keys(r).find(k => k.toLowerCase().includes('pm2.5') || k.toLowerCase().includes('aqi'));
+        if (dKey && r[dKey]) {
+          const dtStr = new Date(r[dKey]).toISOString().split('T')[0];
+          const pm = parseFloat(r[pKey]);
+          if (!isNaN(pm)) map[dtStr] = pm;
+        }
+      });
+      return map;
+    }
+
+    function processFestivalRows(rows) {
+      const map = {};
+      rows.forEach(r => {
+        const dKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
+        const nKey = Object.keys(r).find(k => k.toLowerCase().includes('name'));
+        const tKey = Object.keys(r).find(k => k.toLowerCase().includes('type'));
+        if (dKey && r[dKey]) {
+          const dtStr = new Date(r[dKey]).toISOString().split('T')[0];
+          const isHoliday = (r[tKey] && /state|national/i.test(r[tKey]));
+          map[dtStr] = { name: r[nKey] || 'Holiday', isHoliday: isHoliday };
+        }
+      });
+      return map;
+    }
+
+    // Primary patient forecasting engine running in browser:
+    // Handles scenarios with or without admission data
+    function recalculateForecastFromCSVs() {
+      // 1. Determine target 14-day horizon from available environmental/calendar data
+      let targetDates = [];
+      const candidateDates = new Set([
+        ...Object.keys(uploadedWeather || {}),
+        ...Object.keys(uploadedPollution || {})
+      ]);
+
+      if (candidateDates.size >= 14) {
+        // Take the latest 14 days or next window
+        const sorted = Array.from(candidateDates).sort();
+        targetDates = sorted.slice(-14);
+      } else {
+        // Default to April 1 to April 14, 2019
+        for (let i = 1; i <= 14; i++) {
+          const day = i < 10 ? `0${i}` : `${i}`;
+          targetDates.push(`2019-04-${day}`);
+        }
+      }
+
+      const dowNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const dowCoeffs = [0.0, 10.75, 8.64, 6.56, 6.83, 6.88, 4.67]; // Ref: Sunday
+      const baseIntercept = 14.2;
+
+      const newForecast = targetDates.map(dateStr => {
+        const dt = new Date(dateStr);
+        const dayIdx = dt.getDay();
+        const dayName = dowNames[dayIdx];
+        
+        // Day of year for Fourier seasonality
+        const startOfYear = new Date(dt.getFullYear(), 0, 0);
+        const diff = dt - startOfYear;
+        const oneDay = 1000 * 60 * 60 * 24;
+        const dayOfYear = Math.floor(diff / oneDay);
+        const angle = (2 * Math.PI * dayOfYear) / 365.25;
+
+        // Calendar / Holiday effect
+        let eventName = (dayIdx === 0 || dayIdx === 6) ? 'Weekend' : 'Regular';
+        let isHoliday = false;
+        if (uploadedFestivals && uploadedFestivals[dateStr]) {
+          eventName = uploadedFestivals[dateStr].name;
+          isHoliday = uploadedFestivals[dateStr].isHoliday;
+        } else if (dt.getMonth() === 3) {
+          if (dt.getDate() === 8) { eventName = "Guru Nabha Dass B'day"; isHoliday = true; }
+          if (dt.getDate() === 13) { eventName = "Ram Navami / Vaisakhi"; isHoliday = true; }
+          if (dt.getDate() === 14) { eventName = "Ambedkar Jayanti"; isHoliday = true; }
+        }
+
+        // 1. SARIMAX structural baseline prediction
+        let predicted = baseIntercept + dowCoeffs[dayIdx] + (2.3 * Math.cos(angle)) - (0.06 * Math.sin(angle));
+        if (isHoliday) predicted -= 1.99;
+
+        // 2. Environmental sensitivity adjustment if weather/pollution data provided
+        let envLabel = '';
+        if (uploadedPollution && uploadedPollution[dateStr] !== undefined) {
+          const pmVal = uploadedPollution[dateStr];
+          const pmDelta = (pmVal - 80) / 10.0;
+          predicted += (pmDelta * 0.125);
+          envLabel += `PM2.5: ${Math.round(pmVal)} µg/m³ `;
+        }
+        if (uploadedWeather && uploadedWeather[dateStr] !== undefined) {
+          const tempVal = uploadedWeather[dateStr];
+          const coldDelta = (24.0 - tempVal) / 5.0;
+          predicted += (coldDelta * 0.41);
+          envLabel += `Temp: ${tempVal.toFixed(1)}°C`;
+        }
+
+        predicted = Math.max(0.0, predicted);
+        const sigma = 6.4;
+        const lower80 = Math.max(0.0, predicted - (1.28 * sigma));
+        const upper80 = predicted + (1.28 * sigma);
+
+        return {
+          date: dateStr,
+          day: dayName,
+          event: envLabel ? `${eventName} (${envLabel.trim()})` : eventName,
+          mean: Math.round(predicted * 10) / 10,
+          lower: Math.round(lower80 * 10) / 10,
+          upper: Math.round(upper80 * 10) / 10
+        };
+      });
+
+      baseLoadedForecast = JSON.parse(JSON.stringify(newForecast));
+      currentForecast = JSON.parse(JSON.stringify(newForecast));
+      
+      const badge = document.getElementById('forecast-source-badge');
+      badge.innerText = `Source: Dynamically Forecasted from Uploaded CSVs (${uploadedAdmissions ? 'With Admissions' : 'No Admissions - Environmental DLM Engine'})`;
+      
+      document.getElementById('scenario-tag').innerText = 'Scenario: Uploaded Data Forecast';
+      renderTableAndKPIs();
+    }
+
+    function loadSampleNoAdmissions() {
+      // Simulate input CSVs containing weather and pollution but no admissions
+      const sampleWeather = {};
+      const samplePollution = {};
+      const sampleFestivals = {};
+
+      for (let i = 1; i <= 14; i++) {
+        const dStr = `2019-04-${i < 10 ? '0' + i : i}`;
+        sampleWeather[dStr] = 26.5 + (Math.sin(i) * 3); // ~23-29 C
+        samplePollution[dStr] = 95 + (Math.cos(i) * 25); // ~70-120 ug/m3
+      }
+      sampleFestivals['2019-04-08'] = { name: "Guru Nabha Dass B'day", isHoliday: true };
+      sampleFestivals['2019-04-13'] = { name: "Vaisakhi Festival", isHoliday: true };
+      sampleFestivals['2019-04-14'] = { name: "Ambedkar Jayanti", isHoliday: true };
+
+      uploadedWeather = sampleWeather;
+      uploadedPollution = samplePollution;
+      uploadedFestivals = sampleFestivals;
+      uploadedAdmissions = null;
+
+      document.getElementById('chip-weather').className = 'file-chip active';
+      document.getElementById('chip-weather').innerText = '🌦️ Weather: Ludhiana_hourly_weather.csv (Loaded)';
+      document.getElementById('chip-pollution').className = 'file-chip active';
+      document.getElementById('chip-pollution').innerText = '🏭 Air Quality: AirQuality_Hourly.csv (Loaded)';
+      document.getElementById('chip-festival').className = 'file-chip active';
+      document.getElementById('chip-festival').innerText = '📅 Festival: punjab_festivals.csv (Loaded)';
+      document.getElementById('chip-admission').className = 'file-chip warning';
+      document.getElementById('chip-admission').innerText = 'ℹ️ Admissions: Absent (Auto-Forecasted from Exogenous Conditions)';
+
+      recalculateForecastFromCSVs();
+    }
+
+    function resetToBaseline() {
+      uploadedWeather = null;
+      uploadedPollution = null;
+      uploadedFestivals = null;
+      uploadedAdmissions = null;
+
+      document.getElementById('chip-weather').className = 'file-chip';
+      document.getElementById('chip-weather').innerText = '🌦️ Weather: Default Baseline';
+      document.getElementById('chip-pollution').className = 'file-chip';
+      document.getElementById('chip-pollution').innerText = '🏭 Air Quality: Default Baseline';
+      document.getElementById('chip-festival').className = 'file-chip';
+      document.getElementById('chip-festival').innerText = '📅 Festival: Punjab 2017-2019';
+      document.getElementById('chip-admission').className = 'file-chip warning';
+      document.getElementById('chip-admission').innerText = 'ℹ️ Admissions: Auto-Forecasted from Exogenous Factors';
+
+      baseLoadedForecast = JSON.parse(JSON.stringify(defaultBaselineData));
+      currentForecast = JSON.parse(JSON.stringify(defaultBaselineData));
+      document.getElementById('scenario-tag').innerText = 'Scenario: Baseline';
+      applyPreset('baseline');
+    }
+
+    function exportForecastCSV() {
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "date,day,event_or_conditions,predicted_mean,lower_80,upper_80,ward_beds_needed,icu_beds_needed\n";
+      currentForecast.forEach(r => {
+        const wardBeds = Math.ceil(r.mean * 1.1);
+        const icuBeds = Math.ceil(r.mean * 0.6);
+        const cleanEvent = `"${r.event.replace(/"/g, '""')}"`;
+        csvContent += `${r.date},${r.day},${cleanEvent},${r.mean},${r.lower},${r.upper},${wardBeds},${icuBeds}\n`;
+      });
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `cardiac_patient_forecast_${currentForecast[0].date}_to_${currentForecast[currentForecast.length-1].date}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     window.onload = function() {

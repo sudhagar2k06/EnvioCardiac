@@ -117,17 +117,20 @@ Runs the multi-variable distributed lag model (Lags 0–7) controlling for day-o
 ```
 *Outputs to `data/delayed_effects_summary.csv` and `figures/lag_response_curves.png`.*
 
-### 5. Launch the Hospital Administrator Planning View
+### 5. Launch the Hospital Administrator Planning View & CSV Forecaster
 Open the interactive dashboard directly in any browser:
 ```powershell
 Start-Process "dashboard/hospital_admin_planning_view.html"
 ```
-*(Features interactive Chart.js forecasts, nurse/bed allocation formulas, and dynamic "What-If" scenario sliders for +30% smog surges and cold drops).*
+*(Features drag-and-drop CSV upload for files from `Datasets.zip`, real-time auto-forecasting of patient admissions when admission CSVs are absent, interactive Chart.js forecasts, nurse/bed allocation formulas, dynamic "What-If" scenario sliders, and one-click "Export Forecast CSV").*
 
 ### 6. Generate Custom 14-Day Forecasts (CLI Tool)
 ```powershell
 # Default 14-day forecast from 2019-04-01:
 .venv\Scripts\python.exe predict.py --days 14
+
+# Input folder holding CSV files (with or WITHOUT admission data):
+.venv\Scripts\python.exe predict.py --data-dir "extracted_data/Datasets" --days 14
 
 # Custom start date and custom output file:
 .venv\Scripts\python.exe predict.py --start-date 2019-04-01 --days 14 --output data/forecasts/custom_forecast.csv
