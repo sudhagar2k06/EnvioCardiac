@@ -68,10 +68,3 @@ Thumbs.db
 *.log
 *.tmp
 scratch/
-
-# Hospital datasets and locally generated artifacts
-/data/
-/extracted_data/Datasets/
-/models/
-/figures/
-*.db

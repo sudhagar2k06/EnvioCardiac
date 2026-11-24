@@ -2,8 +2,6 @@
 
 An end-to-end, competition-grade time series forecasting and environmental epidemiology platform for daily hospital cardiac admissions at Hero DMC Heart Institute (HDHI), Ludhiana, Punjab.
 
-Patient-level datasets and data-derived artifacts (including the local database, trained model, and generated figures) are not included in this repository. Obtain and use source datasets only through an authorized, licensed channel, and keep local copies under the ignored data directories.
-
 Developed for the **PS-06 Hospital Admissions Hackathon**, strictly adhering to the SARIMAX modeling requirement and the official evaluation contract defined in `HARNESS.md`.
 
 ---
