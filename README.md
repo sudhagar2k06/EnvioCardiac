@@ -23,6 +23,7 @@ Developed for the **PS-06 Hospital Admissions Hackathon**, strictly adhering to 
 EnvioCardiac/
 ├── submission.py                     # Primary contest entry: defines forecast(cutoff_date) under HARNESS.md
 ├── team_stub.py                       # Submission verification & quick self-test runner
+├── evaluate_accuracy.py               # Standalone program to compute accuracy & render 4-panel evaluation graph
 ├── predict.py                         # Standalone CLI inference tool for custom dates
 ├── build_clean_dataset.py             # Root launcher for data cleaning & 4-way join pipeline
 ├── delayed_effects_analysis.py        # Root launcher for distributed lag statistical analysis
@@ -32,6 +33,7 @@ EnvioCardiac/
 │
 ├── src/                               # Modular production source code
 │   ├── __init__.py
+│   ├── evaluate_accuracy.py           # Model accuracy evaluation and multi-panel graph generator
 │   ├── build_clean_dataset.py         # Data cleaning, date disambiguation & 4-way join pipeline
 │   ├── delayed_effects_analysis.py    # Multi-Variable Distributed Lag Model (Lags 0 to 7)
 │   ├── train_final_model.py           # Trains SARIMAX model and writes artifacts
@@ -50,6 +52,7 @@ EnvioCardiac/
 │   └── cardiac_admissions_model.pkl   # Serialized SARIMAX model fit & exog metadata
 │
 ├── figures/                           # Visualizations and diagnostic plots
+│   ├── model_accuracy_evaluation.png  # 4-panel comprehensive accuracy evaluation chart
 │   ├── lag_response_curves.png        # 4-panel impulse response curves (PM2.5, Cold, DOW, Holidays)
 │   ├── forecast_chart.png             # Historical actuals (last 60 days) + 14-day forecast with 80% & 95% CIs
 │   └── diagnostic_chart.png           # 4-panel SARIMAX residual diagnostics (Standardized residuals, Q-Q, Correlogram)
@@ -97,34 +100,41 @@ Runs the official submission contract for any cutoff date between Jan and Mar 20
 .venv\Scripts\python.exe -c "from submission import forecast; print(forecast('2019-01-15'))"
 ```
 
-### 2. Run the Full Harness Evaluation Simulation
-Evaluates the model across 4 hidden cutoff dates (56 evaluation days), calculating MAE error ratio against seasonal-naive baseline and 80% interval coverage:
+### 2. Run the Accuracy Evaluation & Multi-Panel Visualization Graph
+Runs the 56-day evaluation across all 4 competition cut-offs, calculates accuracy metrics (MAE, RMSE, MAPE, Coverage), and renders the 4-panel accuracy graph:
+```powershell
+.venv\Scripts\python.exe evaluate_accuracy.py
+```
+*Outputs to terminal and saves publication-grade plot to [`figures/model_accuracy_evaluation.png`](figures/model_accuracy_evaluation.png).*
+
+### 3. Run the Official Evaluation Harness Simulation (Headless)
+Calculates MAE error ratio against seasonal-naive baseline and 80% interval coverage:
 ```powershell
 .venv\Scripts\python.exe test_harness_simulation.py
 ```
 
-### 3. Rebuild the Clean Master Dataset
+### 4. Rebuild the Clean Master Dataset
 Executes the data cleaning, mixed-format date disambiguation, and 4-way join:
 ```powershell
 .venv\Scripts\python.exe build_clean_dataset.py
 ```
 *Outputs to `data/clean_daily_dataset.csv`.*
 
-### 4. Run Delayed Effects & Distributed Lag Analysis
+### 5. Run Delayed Effects & Distributed Lag Analysis
 Runs the multi-variable distributed lag model (Lags 0–7) controlling for day-of-week and public holidays:
 ```powershell
 .venv\Scripts\python.exe delayed_effects_analysis.py
 ```
 *Outputs to `data/delayed_effects_summary.csv` and `figures/lag_response_curves.png`.*
 
-### 5. Launch the Hospital Administrator Planning View & CSV Forecaster
+### 6. Launch the Hospital Administrator Planning View & CSV Forecaster
 Open the interactive dashboard directly in any browser:
 ```powershell
 Start-Process "dashboard/hospital_admin_planning_view.html"
 ```
 *(Features drag-and-drop CSV upload for files from `Datasets.zip`, real-time auto-forecasting of patient admissions when admission CSVs are absent, interactive Chart.js forecasts, nurse/bed allocation formulas, dynamic "What-If" scenario sliders, and one-click "Export Forecast CSV").*
 
-### 6. Generate Custom 14-Day Forecasts (CLI Tool)
+### 7. Generate Custom 14-Day Forecasts (CLI Tool)
 ```powershell
 # Default 14-day forecast from 2019-04-01:
 .venv\Scripts\python.exe predict.py --days 14
